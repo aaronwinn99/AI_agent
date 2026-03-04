@@ -10,7 +10,16 @@ load_dotenv()
 
 def env_value(name):
     value = os.getenv(name)
-    return value.strip() if value else None
+    if not value:
+        return None
+
+    clean = value.strip().strip('"').strip("'")
+    prefix = f"{name}="
+    if clean.startswith(prefix):
+        clean = clean[len(prefix) :].strip()
+    if clean.lower().startswith("bearer "):
+        clean = clean[7:].strip()
+    return clean
 
 
 OPENAI_API_KEY = env_value("OPENAI_API_KEY")
@@ -36,9 +45,11 @@ def validate_env():
             "Missing required environment variables: " + ", ".join(missing)
         )
     if not values["OPENAI_API_KEY"].startswith("sk-"):
+        preview = values["OPENAI_API_KEY"][:12]
         raise ValueError(
             "OPENAI_API_KEY looks invalid. Set only the raw key value"
             " (no quotes, no leading spaces, no OPENAI_API_KEY= prefix)."
+            f" Current value starts with: {preview!r}"
         )
 
 
