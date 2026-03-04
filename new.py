@@ -3,13 +3,20 @@ import os
 import resend
 from datetime import datetime
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, AuthenticationError
 
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL")
+
+
+def env_value(name):
+    value = os.getenv(name)
+    return value.strip() if value else None
+
+
+OPENAI_API_KEY = env_value("OPENAI_API_KEY")
+RESEND_API_KEY = env_value("RESEND_API_KEY")
+NEWS_API_KEY = env_value("NEWS_API_KEY")
+FROM_EMAIL = env_value("FROM_EMAIL")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 resend.api_key = RESEND_API_KEY
@@ -22,10 +29,16 @@ def validate_env():
         "RESEND_API_KEY",
         "FROM_EMAIL",
     ]
-    missing = [name for name in required if not os.getenv(name)]
+    values = {name: env_value(name) for name in required}
+    missing = [name for name, value in values.items() if not value]
     if missing:
         raise ValueError(
             "Missing required environment variables: " + ", ".join(missing)
+        )
+    if not values["OPENAI_API_KEY"].startswith("sk-"):
+        raise ValueError(
+            "OPENAI_API_KEY looks invalid. Set only the raw key value"
+            " (no quotes, no leading spaces, no OPENAI_API_KEY= prefix)."
         )
 
 
@@ -72,11 +85,17 @@ Tasks:
 
 Format nicely for an email newsletter And sign from Aarons Assistant.
     """
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=1000,
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1000,
+        )
+    except AuthenticationError as error:
+        raise RuntimeError(
+            "OpenAI authentication failed. Check OPENAI_API_KEY in Railway"
+            " Variables and ensure it is the full raw key."
+        ) from error
     return response.choices[0].message.content
 
 
